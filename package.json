@@ -1,0 +1,21 @@
+{
+  "name": "pdf-converter-app",
+  "version": "1.0.0",
+  "description": "PDF to CSV converter with a serverless backend",
+  "main": "index.js",
+  "scripts": {
+    "dev": "echo 'Run locally by deploying to Vercel'",
+    "build": "echo 'Vercel handles the build process'"
+  },
+  "dependencies": {
+    "@google/genai": "^1.28.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
