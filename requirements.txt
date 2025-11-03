@@ -1,0 +1,4 @@
+This is a Node.js project. Dependencies are managed in the `package.json` file.
+
+To install all required dependencies, run the following command in your terminal:
+npm install
