@@ -1,0 +1,11 @@
+{
+  "name": "pdf-converter-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Serverless function for PDF to CSV conversion",
+  "main": "convert.ts",
+  "dependencies": {
+    "@google/genai": "^1.28.0",
+    "@netlify/functions": "^2.7.0"
+  }
+}
