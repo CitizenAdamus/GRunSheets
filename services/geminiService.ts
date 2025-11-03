@@ -2,11 +2,11 @@ import { GoogleGenAI } from "@google/genai";
 
 export const convertPdfToCsv = async (
   base64File: string,
-  mimeType: string
+  mimeType: string,
+  apiKey: string
 ): Promise<string> => {
-  const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API_KEY is not configured in your environment.");
+    throw new Error("API_KEY is not provided.");
   }
   
   const ai = new GoogleGenAI({ apiKey });
@@ -112,6 +112,9 @@ export const convertPdfToCsv = async (
 
   } catch (error) {
     console.error("Error calling Gemini API:", error);
+    if (error instanceof Error && error.message.includes('API key not valid')) {
+        throw new Error('The provided API Key is not valid. Please check the key and try again.');
+    }
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while contacting the AI model.";
     throw new Error(errorMessage);
   }

@@ -4,10 +4,13 @@ import { Button } from './components/Button';
 import { Spinner } from './components/Spinner';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { ConvertIcon } from './components/icons/ConvertIcon';
+import { KeyIcon } from './components/icons/KeyIcon';
 import { fileToBase64 } from './utils/fileUtils';
 import { convertPdfToCsv } from './services/geminiService';
+import { ApiKeyInput } from './components/ApiKeyInput';
 
 const App: React.FC = () => {
+  const [apiKey, setApiKey] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [csvData, setCsvData] = useState<string | null>(null);
@@ -20,7 +23,7 @@ const App: React.FC = () => {
   };
 
   const handleConvert = useCallback(async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !apiKey) return;
 
     setIsProcessing(true);
     setError(null);
@@ -28,7 +31,7 @@ const App: React.FC = () => {
 
     try {
       const base64File = await fileToBase64(selectedFile);
-      const generatedCsv = await convertPdfToCsv(base64File, selectedFile.type);
+      const generatedCsv = await convertPdfToCsv(base64File, selectedFile.type, apiKey);
       setCsvData(generatedCsv);
     } catch (err) {
       console.error(err);
@@ -36,7 +39,7 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedFile]);
+  }, [selectedFile, apiKey]);
 
   const handleDownload = () => {
     if (!csvData) return;
@@ -55,17 +58,33 @@ const App: React.FC = () => {
     link.click();
     document.body.removeChild(link);
   };
+  
+  const handleApiKeySubmit = (key: string) => {
+    setApiKey(key);
+  };
+
+  if (!apiKey) {
+    return <ApiKeyInput onSubmit={handleApiKeySubmit} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4 font-sans">
       <div className="w-full max-w-2xl mx-auto">
-        <header className="text-center mb-8">
+        <header className="text-center mb-8 relative">
           <h1 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-300">
             PDF Runsheet Converter
           </h1>
           <p className="text-gray-400 mt-2 text-lg">
             Automatically convert your transportation PDF runsheets to perfectly formatted CSV files.
           </p>
+          <button 
+            onClick={() => setApiKey('')}
+            className="absolute top-0 right-0 mt-1 text-gray-500 hover:text-gray-300 transition-colors"
+            aria-label="Reset API Key"
+            title="Reset API Key"
+          >
+            <KeyIcon className="w-6 h-6"/>
+          </button>
         </header>
 
         <main className="bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 border border-gray-700">
