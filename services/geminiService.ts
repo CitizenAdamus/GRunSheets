@@ -1,5 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1000;
+
 export const convertPdfToCsv = async (
   base64File: string,
   mimeType: string
@@ -91,31 +94,66 @@ export const convertPdfToCsv = async (
       - If a value for a specific column is not found for a row, leave it empty.
     `;
     
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: {
-        parts: [
-          { text: prompt },
-          {
-            inlineData: {
-              data: base64File,
-              mimeType: mimeType,
-            },
-          },
-        ],
-      },
-    });
-    
-    const text = response.text ?? '';
-    // The model may still wrap the response in markdown code blocks despite the prompt.
-    // This removes the wrapping ```csv ... ``` or ``` ... ``` safely.
-    const cleanedCsv = text.replace(/^```(?:csv)?\n?/, '').replace(/```$/, '').trim();
-    return cleanedCsv;
+  let lastError: Error | null = null;
 
-  } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while contacting the AI model.";
-    throw new Error(errorMessage);
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: base64File,
+                mimeType: mimeType,
+              },
+            },
+          ],
+        },
+      });
+      
+      const text = response.text ?? '';
+      // The model may still wrap the response in markdown code blocks despite the prompt.
+      // This removes the wrapping ```csv ... ``` or ``` ... ``` safely.
+      const cleanedCsv = text.replace(/^```(?:csv)?\n?/, '').replace(/```$/, '').trim();
+      return cleanedCsv;
+
+    } catch (error) {
+      console.error(`Error calling Gemini API (attempt ${attempt + 1}/${MAX_RETRIES}):`, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      const errorMessage = (lastError.message || '').toLowerCase();
+      
+      // Only retry on 5xx server errors, which are likely transient.
+      if (errorMessage.includes('internal') || errorMessage.includes('500')) {
+        if (attempt < MAX_RETRIES - 1) {
+          // Exponential backoff
+          const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      } else {
+        // Not a retriable error (e.g., 4xx), so break the loop immediately.
+        break;
+      }
+    }
   }
+
+  if (!lastError) {
+    // This case should technically not be reachable if the loop completes without success
+    throw new Error('An unknown error occurred during the conversion process.');
+  }
+
+  const errorMessage = (lastError.message || '').toLowerCase();
+  if (errorMessage.includes('internal') || errorMessage.includes('500')) {
+    throw new Error(
+      'The AI model is experiencing high demand or a temporary issue. Please try again in a few moments.'
+    );
+  }
+  
+  // For other errors, provide a more general message that hints at potential file issues.
+  throw new Error(
+    'Failed to convert the PDF. The file may be in an unsupported format, corrupted, or too large to process.'
+  );
 };
