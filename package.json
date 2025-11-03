@@ -5,9 +5,7 @@
   "description": "PDF to CSV converter with a serverless backend",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "echo 'To run locally, use a live server extension in your code editor.'"
   },
   "dependencies": {
     "@google/genai": "^1.28.0",
@@ -18,12 +16,7 @@
   "devDependencies": {
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
-    "@types/node": "^20.14.2",
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.19",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.4",
-    "vite": "^5.3.1"
+    "@types/node": "^20.14.2"
   },
   "author": "",
   "license": "ISC"
