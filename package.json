@@ -8,6 +8,9 @@
     "dev": "echo 'Run locally by deploying to Vercel'",
     "build": "mkdir public && cp index.html index.tsx App.tsx metadata.json public/ && cp -R components public/ && cp -R services public/ && cp -R utils public/"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@google/genai": "^1.28.0",
     "react": "^19.2.0",
