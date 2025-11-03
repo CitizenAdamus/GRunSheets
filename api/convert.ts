@@ -1,6 +1,4 @@
-
-// Use dynamic import with top-level await to resolve module compatibility issues in the Vercel build environment.
-const { GoogleGenAI } = await import("@google/genai");
+import { GoogleGenAI } from "@google/genai";
 
 // This function will be deployed as a Vercel Serverless Function.
 // It is not meant to be run in the browser.
