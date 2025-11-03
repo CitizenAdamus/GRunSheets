@@ -19,36 +19,32 @@ An application that automatically converts a PDF transportation runsheet into a 
 -   **AI Model:** Google Gemini 2.5 Pro
 -   **Dependencies:** `@google/genai`
 
-## Prerequisites
-
-Before you begin, ensure you have the following:
--   A modern web browser (e.g., Chrome, Firefox, Safari).
--   A code editor with a live server extension (e.g., [Live Server for VS Code](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer)).
-
 ## Getting Started
 
-Follow these simple steps to run the project locally.
+Follow these steps to set up and run the project locally.
 
-### 1. Get a Gemini API Key
+### Step 1: Install Dependencies (Crucial for Code Editor)
+
+This is the most important step to ensure your code editor (like VS Code) understands the project and doesn't show errors.
+
+Open your terminal in the project's root directory and run:
+
+```bash
+npm install
+```
+
+**Why is this required?** This command downloads the "type definition" files for libraries like React. These files act like a dictionary for TypeScript, allowing it to provide autocompletion and error-checking in your editor. The app itself runs in the browser using files from a CDN, but your editor needs these local files to work properly.
+
+### Step 2: Get a Gemini API Key
 
 If you don't have one, you can get a key from [Google AI Studio](https://aistudio.google.com/app/apikey). This key is required to use the app's conversion features.
 
-### 2. Download or Clone the Repository
+### Step 3: Run with a Live Server
 
-Download the project files as a ZIP or clone the repository to your local machine.
-
-```bash
-git clone <repository-url>
-cd <repository-directory>
-```
-
-### 3. Open in Your Code Editor
-
-Open the project folder in your code editor (e.g., VS Code).
-
-### 4. Run with a Live Server
-
-Right-click the `index.html` file and select "Open with Live Server" (or the equivalent option for your editor's extension). This will open the application in your default web browser.
+Once dependencies are installed, you can run the app.
+-   Right-click the `index.html` file in your editor.
+-   Select "Open with Live Server" (or the equivalent option for your editor's extension).
+-   This will open the application in your default web browser.
 
 ## Usage
 
@@ -63,18 +59,3 @@ Right-click the `index.html` file and select "Open with Live Server" (or the equ
 
 3.  **Reset API Key:**
     -   If you need to change your API key, click the key icon in the top-right corner of the converter screen.
-
-## Project Structure
-
-```
-.
-├── components/         # Reusable React components (Button, FileUpload, etc.)
-│   └── icons/          # SVG icon components
-├── services/           # Contains the core Gemini API logic (geminiService.ts)
-├── utils/              # Utility functions (e.g., file-to-base64 conversion)
-├── App.tsx             # Main application component
-├── index.html          # Entry point HTML file
-├── index.tsx           # React root renderer
-├── package.json        # Project dependencies (for reference)
-└── README.md           # This file
-```

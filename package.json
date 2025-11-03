@@ -2,15 +2,13 @@
   "name": "pdf-converter-app",
   "version": "1.0.0",
   "type": "module",
-  "description": "PDF to CSV converter with a serverless backend",
+  "description": "PDF to CSV converter using Gemini AI",
   "main": "index.js",
   "scripts": {
     "dev": "echo 'To run locally, use a live server extension in your code editor.'"
   },
   "dependencies": {
-    "@google/genai": "^1.28.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "@google/genai": "^1.28.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
