@@ -1,8 +1,8 @@
 
 import React, { useState, useCallback } from 'react';
-import { UploadIcon } from './icons/UploadIcon';
-import { PdfIcon } from './icons/PdfIcon';
-import { CloseIcon } from './icons/CloseIcon';
+import { UploadIcon } from './icons/UploadIcon.tsx';
+import { PdfIcon } from './icons/PdfIcon.tsx';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface FileUploadProps {
   onFileSelect: (file: File | null) => void;

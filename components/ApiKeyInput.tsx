@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Button } from './Button';
-import { KeyIcon } from './icons/KeyIcon';
+import { Button } from './Button.tsx';
+import { KeyIcon } from './icons/KeyIcon.tsx';
 
 interface ApiKeyInputProps {
   onSubmit: (apiKey: string) => void;

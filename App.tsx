@@ -1,13 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { FileUpload } from './components/FileUpload';
-import { Button } from './components/Button';
-import { Spinner } from './components/Spinner';
-import { DownloadIcon } from './components/icons/DownloadIcon';
-import { ConvertIcon } from './components/icons/ConvertIcon';
-import { KeyIcon } from './components/icons/KeyIcon';
-import { fileToBase64 } from './utils/fileUtils';
-import { convertPdfToCsv } from './services/geminiService';
-import { ApiKeyInput } from './components/ApiKeyInput';
+import { FileUpload } from './components/FileUpload.tsx';
+import { Button } from './components/Button.tsx';
+import { Spinner } from './components/Spinner.tsx';
+import { DownloadIcon } from './components/icons/DownloadIcon.tsx';
+import { ConvertIcon } from './components/icons/ConvertIcon.tsx';
+import { KeyIcon } from './components/icons/KeyIcon.tsx';
+import { fileToBase64 } from './utils/fileUtils.ts';
+import { convertPdfToCsv } from './services/geminiService.ts';
+import { ApiKeyInput } from './components/ApiKeyInput.tsx';
 
 const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('');
