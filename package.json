@@ -1,6 +1,7 @@
 {
   "name": "pdf-converter-app",
   "version": "1.0.0",
+  "type": "module",
   "description": "PDF to CSV converter with a serverless backend",
   "main": "index.js",
   "scripts": {

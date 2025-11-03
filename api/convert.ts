@@ -126,7 +126,7 @@ export default async function handler(req: Request) {
       },
     });
     
-    const cleanedCsv = response.text.replace(/```csv\n/g, '').replace(/```/g, '').trim();
+    const cleanedCsv = (response.text ?? '').replace(/```csv\n/g, '').replace(/```/g, '').trim();
 
     return new Response(cleanedCsv, {
       status: 200,
