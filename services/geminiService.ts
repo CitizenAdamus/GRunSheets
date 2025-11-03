@@ -107,7 +107,10 @@ export const convertPdfToCsv = async (
       },
     });
     
-    const cleanedCsv = (response.text ?? '').replace(/```csv\n/g, '').replace(/```/g, '').trim();
+    const text = response.text ?? '';
+    // The model may still wrap the response in markdown code blocks despite the prompt.
+    // This removes the wrapping ```csv ... ``` or ``` ... ``` safely.
+    const cleanedCsv = text.replace(/^```(?:csv)?\n?/, '').replace(/```$/, '').trim();
     return cleanedCsv;
 
   } catch (error) {
