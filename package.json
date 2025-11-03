@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "echo 'Run locally by deploying to Vercel'",
-    "build": "echo 'Vercel handles the build process'"
+    "build": "mkdir public && cp index.html index.tsx App.tsx metadata.json public/ && cp -R components public/ && cp -R services public/ && cp -R utils public/"
   },
   "dependencies": {
     "@google/genai": "^1.28.0",
