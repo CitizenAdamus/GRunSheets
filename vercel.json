@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/convert.ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}
