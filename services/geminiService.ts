@@ -3,6 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
+const CHUNK_SIZE = 10; // Process 10 pages at a time
 
 const PROMPT = `
       You are an expert data extraction and transformation tool. Your task is to analyze the provided PDF transportation runsheet and convert all the relevant data into a single, clean CSV formatted string.
@@ -177,34 +178,40 @@ export const convertPdfToCsv = async (
     throw new Error("The PDF file is empty or corrupted.");
   }
 
-  const csvPageResults: string[] = [];
+  const csvChunkResults: string[] = [];
 
-  for (let i = 0; i < pageCount; i++) {
-    onProgressUpdate(`Processing page ${i + 1} of ${pageCount}...`);
+  for (let i = 0; i < pageCount; i += CHUNK_SIZE) {
+    const startPage = i;
+    const endPage = Math.min(i + CHUNK_SIZE, pageCount);
+    
+    onProgressUpdate(`Processing pages ${startPage + 1}-${endPage} of ${pageCount}...`);
     
     const subDocument = await PDFDocument.create();
-    const [copiedPage] = await subDocument.copyPages(pdfDoc, [i]);
-    subDocument.addPage(copiedPage);
+    const pageIndices = Array.from({ length: endPage - startPage }, (_, k) => startPage + k);
+    const copiedPages = await subDocument.copyPages(pdfDoc, pageIndices);
+    copiedPages.forEach(page => subDocument.addPage(page));
     
-    const pageBytes = await subDocument.save();
-    const pageBase64 = uint8ArrayToBase64(pageBytes);
+    const chunkBytes = await subDocument.save();
+    const chunkBase64 = uint8ArrayToBase64(chunkBytes);
     
-    const pageCsv = await callGeminiWithRetry(ai, pageBase64, mimeType);
-    if (pageCsv) {
-      csvPageResults.push(pageCsv);
+    const chunkCsv = await callGeminiWithRetry(ai, chunkBase64, mimeType);
+    if (chunkCsv) {
+      csvChunkResults.push(chunkCsv);
     }
   }
   
   onProgressUpdate('Combining results...');
   
   const finalCsvLines: string[] = [];
-  csvPageResults.forEach((pageCsv, index) => {
-    const lines = pageCsv.split('\n').filter(line => line.trim() !== '');
+  csvChunkResults.forEach((chunkCsv, index) => {
+    const lines = chunkCsv.split('\n').filter(line => line.trim() !== '');
     if (lines.length === 0) return;
 
     if (index === 0) {
+      // For the first chunk, take all lines (header + data)
       finalCsvLines.push(...lines);
     } else {
+      // For subsequent chunks, skip the header row
       const headerRegex = /^"Date","Run Number"/i;
       if (headerRegex.test(lines[0])) {
         finalCsvLines.push(...lines.slice(1));
