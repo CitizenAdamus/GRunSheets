@@ -10,6 +10,7 @@ import { convertPdfToCsv } from './services/geminiService';
 const App: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [csvData, setCsvData] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,6 +18,7 @@ const App: React.FC = () => {
     setSelectedFile(file);
     setCsvData(null);
     setError(null);
+    setProgressMessage(null);
   };
 
   const handleConvert = useCallback(async () => {
@@ -25,16 +27,18 @@ const App: React.FC = () => {
     setIsProcessing(true);
     setError(null);
     setCsvData(null);
+    setProgressMessage('Initializing...');
 
     try {
       const base64File = await fileToBase64(selectedFile);
-      const generatedCsv = await convertPdfToCsv(base64File, selectedFile.type);
+      const generatedCsv = await convertPdfToCsv(base64File, selectedFile.type, setProgressMessage);
       setCsvData(generatedCsv);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred during conversion.');
     } finally {
       setIsProcessing(false);
+      setProgressMessage(null);
     }
   }, [selectedFile]);
 
@@ -82,7 +86,7 @@ const App: React.FC = () => {
                 {isProcessing ? (
                   <>
                     <Spinner />
-                    Processing...
+                    {progressMessage || 'Processing...'}
                   </>
                 ) : (
                   <>

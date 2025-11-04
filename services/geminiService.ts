@@ -1,20 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
+import { PDFDocument } from 'pdf-lib';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
 
-export const convertPdfToCsv = async (
-  base64File: string,
-  mimeType: string
-): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY is not configured in your environment.");
-  }
-  
-  const ai = new GoogleGenAI({ apiKey });
-  
-  const prompt = `
+const PROMPT = `
       You are an expert data extraction and transformation tool. Your task is to analyze the provided PDF transportation runsheet and convert all the relevant data into a single, clean CSV formatted string.
 
       The final CSV file MUST have the following columns in this exact order:
@@ -93,7 +83,31 @@ export const convertPdfToCsv = async (
       - Do NOT include any explanations, introductory text, or markdown formatting like \`\`\`csv or \`\`\`.
       - If a value for a specific column is not found for a row, leave it empty.
     `;
-    
+
+const base64ToUint8Array = (base64: string): Uint8Array => {
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes;
+};
+
+const uint8ArrayToBase64 = (bytes: Uint8Array): string => {
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+};
+
+const callGeminiWithRetry = async (
+  ai: GoogleGenAI,
+  base64Page: string,
+  mimeType: string
+): Promise<string> => {
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -102,10 +116,10 @@ export const convertPdfToCsv = async (
         model: 'gemini-2.5-pro',
         contents: {
           parts: [
-            { text: prompt },
+            { text: PROMPT },
             {
               inlineData: {
-                data: base64File,
+                data: base64Page,
                 mimeType: mimeType,
               },
             },
@@ -114,46 +128,95 @@ export const convertPdfToCsv = async (
       });
       
       const text = response.text ?? '';
-      // The model may still wrap the response in markdown code blocks despite the prompt.
-      // This removes the wrapping ```csv ... ``` or ``` ... ``` safely.
-      const cleanedCsv = text.replace(/^```(?:csv)?\n?/, '').replace(/```$/, '').trim();
-      return cleanedCsv;
+      return text.replace(/^```(?:csv)?\n?/, '').replace(/```$/, '').trim();
 
     } catch (error) {
-      console.error(`Error calling Gemini API (attempt ${attempt + 1}/${MAX_RETRIES}):`, error);
+      console.error(`Error on page conversion (attempt ${attempt + 1}/${MAX_RETRIES}):`, error);
       lastError = error instanceof Error ? error : new Error(String(error));
-
       const errorMessage = (lastError.message || '').toLowerCase();
       
-      // Only retry on 5xx server errors, which are likely transient.
       if (errorMessage.includes('internal') || errorMessage.includes('500')) {
         if (attempt < MAX_RETRIES - 1) {
-          // Exponential backoff
           const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
       } else {
-        // Not a retriable error (e.g., 4xx), so break the loop immediately.
         break;
       }
     }
   }
 
-  if (!lastError) {
-    // This case should technically not be reachable if the loop completes without success
-    throw new Error('An unknown error occurred during the conversion process.');
-  }
-
-  const errorMessage = (lastError.message || '').toLowerCase();
+  const finalError = lastError || new Error('An unknown error occurred during conversion.');
+  const errorMessage = (finalError.message || '').toLowerCase();
   if (errorMessage.includes('internal') || errorMessage.includes('500')) {
-    throw new Error(
-      'The AI model is experiencing high demand or a temporary issue. Please try again in a few moments.'
-    );
+    throw new Error('The AI model is busy. Please try again in a moment.');
   }
   
-  // For other errors, provide a more general message that hints at potential file issues.
-  throw new Error(
-    'Failed to convert the PDF. The file may be in an unsupported format, corrupted, or too large to process.'
-  );
+  throw new Error('Failed to convert a page. The file may be corrupted or in an unsupported format.');
+};
+
+export const convertPdfToCsv = async (
+  base64File: string,
+  mimeType: string,
+  onProgressUpdate: (message: string) => void
+): Promise<string> => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY is not configured in your environment.");
+  }
+  
+  const ai = new GoogleGenAI({ apiKey });
+  
+  onProgressUpdate('Loading PDF...');
+  const pdfBytes = base64ToUint8Array(base64File);
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const pageCount = pdfDoc.getPageCount();
+
+  if (pageCount === 0) {
+    throw new Error("The PDF file is empty or corrupted.");
+  }
+
+  const csvPageResults: string[] = [];
+
+  for (let i = 0; i < pageCount; i++) {
+    onProgressUpdate(`Processing page ${i + 1} of ${pageCount}...`);
+    
+    const subDocument = await PDFDocument.create();
+    const [copiedPage] = await subDocument.copyPages(pdfDoc, [i]);
+    subDocument.addPage(copiedPage);
+    
+    const pageBytes = await subDocument.save();
+    const pageBase64 = uint8ArrayToBase64(pageBytes);
+    
+    const pageCsv = await callGeminiWithRetry(ai, pageBase64, mimeType);
+    if (pageCsv) {
+      csvPageResults.push(pageCsv);
+    }
+  }
+  
+  onProgressUpdate('Combining results...');
+  
+  const finalCsvLines: string[] = [];
+  csvPageResults.forEach((pageCsv, index) => {
+    const lines = pageCsv.split('\n').filter(line => line.trim() !== '');
+    if (lines.length === 0) return;
+
+    if (index === 0) {
+      finalCsvLines.push(...lines);
+    } else {
+      const headerRegex = /^"Date","Run Number"/i;
+      if (headerRegex.test(lines[0])) {
+        finalCsvLines.push(...lines.slice(1));
+      } else {
+        finalCsvLines.push(...lines);
+      }
+    }
+  });
+
+  if (finalCsvLines.length < 2) { // Should have at least a header and one data row
+    throw new Error("Conversion resulted in empty or incomplete data. The PDF might not contain a valid runsheet.");
+  }
+
+  return finalCsvLines.join('\n');
 };
