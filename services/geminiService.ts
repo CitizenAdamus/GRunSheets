@@ -3,7 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
-const CHUNK_SIZE = 10; // Process 10 pages at a time
+const CHUNK_SIZE = 42; // Process 42 pages at a time
 
 const PROMPT = `
       You are an expert data extraction and transformation tool. Your task is to analyze the provided PDF transportation runsheet and convert all the relevant data into a single, clean CSV formatted string.
@@ -13,7 +13,7 @@ const PROMPT = `
 
       Follow these specific instructions for data transformation for EACH ROW of the PDF:
 
-      ### Part 1: Date and Time Processing
+      ### Part 1: Date, Time, and Mileage Processing
 
       1.  **"Date" Column:**
           - Identify the main date for the runsheet, which is typically located at the top of the PDF page (e.g., "10/2/2025").
@@ -22,6 +22,11 @@ const PROMPT = `
 
       2.  **"Dropoff Time" Column:**
           - Locate the dropoff time for each trip within the PDF and populate this column. This data may appear in its own column or near the dropoff address.
+
+      3.  **"Mileage" Column:**
+          - Locate the column in the PDF that contains the mileage for each trip.
+          - This value is numerical. For every valid trip, you must extract this value.
+          - If the data exists in the document for a specific row, this field MUST be populated.
 
       ### Part 2: Data Fill-Down & Address Processing
 
@@ -38,13 +43,11 @@ const PROMPT = `
           - **Example**: "70 LEONARD AVE, TOROTO" MUST become "70 LEONARD AVE, TORONTO".
 
       3.  **"Dropoff Address" Column:**
+          - For every trip with a customer and pickup address, you MUST extract the corresponding dropoff address. This field is mandatory and must not be left blank if the information exists in the document.
           - Perform the same extraction and mandatory mapping process as the "Pickup Address". Move any extra text to the "Comments" column.
           - **Example**: "5 PIPPIN PL, ETOBI" MUST become "5 PIPPIN PL, ETOBICOKE".
 
-      **City Mappings (Apply to both Pickup and Dropoff Addresses):**
-      - 'NORTH': 'NORTH YORK', 'SCARB': 'SCARBOROUGH', 'TOROT': 'TORONTO', 'MARKH': 'MARKHAM', 'EASTY': 'EAST YORK', 'ETOBI': 'ETOBICOKE', 'VAUGH': 'VAUGHAN', 'MISSI': 'MISSISSAUGA', 'PICKE': 'PICKERING'
-
-      ### Part 3: The "Comments" Column
+      ### Part 3: The "Comments" Column & Mappings
 
       This single column combines all notes. Construct it carefully by following these steps in order:
 
@@ -66,18 +69,24 @@ const PROMPT = `
             c. Replace ' Yes / ' with a single space.
           - Finally, apply all abbreviation replacements from the **Comment Mappings** to the entire combined string.
 
-      **Example for the "Comments" column:**
-      - For a trip with "Pickup Ad": "123 MAIN ST TOROT / INTERSECTION HWY 401", "Nb.": "1", "Dev.": "KNF", "Dropoff Address": "456 OAK AVE SCARB / SIDE DOOR", and "Drop_Off_Comments": "APT BLDG / DNLU", the final "Comments" cell would be:
-      "Pickup Comments: INTERSECTION HWY 401 / Passengers: 1 / Device: Non-folding Cane or Walker / Dropoff Comments: SIDE DOOR / Apartment Building / Do Not Leave Unattended"
-
-      ### Part 4: Mappings & Final Checks
+      **City Mappings (Apply to both Pickup and Dropoff Addresses):**
+      - 'NORTH': 'NORTH YORK', 'SCARB': 'SCARBOROUGH', 'TOROT': 'TORONTO', 'MARKH': 'MARKHAM', 'EASTY': 'EAST YORK', 'ETOBI': 'ETOBICOKE', 'VAUGH': 'VAUGHAN', 'MISSI': 'MISSISSAUGA', 'PICKE': 'PICKERING'
 
       **Comment Mappings:**
       - "DNLU": "Do Not Leave Unattended", "MAND.ESC": "Mandatory Escort / Support Person Required", "COG": "Cognitive (disability)", "APT BLDG": "Apartment Building", "MSP": "Mandatory Support Person", "FRONT ENTR": "Front Entrance", "FRONT": "Front Entrance", "CHEMO": "Chemotherapy (medical condition)", "SUP. PER": "Support Person", "SEIZ": "Seizures (medical condition)", "MAIN ENT": "Main Entrance", "EPILEPSY": "Epilepsy (medical condition)", "CX": "Customer", "P/U": "Pickup", "PU": "Pickup", "D/O": "Dropoff", "DO": "Dropoff", "SPAC": "Support Person Card", "ADP": "A Day Program", 'CANE': 'CANE', 'WALKER': 'WALKER', 'KF': 'Folding Cane or Walker', 'KNF': 'Non-folding Cane or Walker', 'WNF': 'Walker non folding'
-      
-      **CRITICAL FINAL CHECK:**
-      - Before outputting the CSV, double-check every single row in the "Pickup Address" and "Dropoff Address" columns.
-      - Confirm that ALL city abbreviations (e.g., 'TOROT', 'SCARB', 'ETOBI') have been replaced with their full names as defined in the City Mappings. This is a non-negotiable final quality check.
+
+      ### Part 4: ABSOLUTE FINAL VALIDATION - NON-NEGOTIABLE RULES
+      Before providing the final CSV output, you must perform a self-correction pass and verify every single row against these rules. Failure to comply will result in an incorrect output.
+
+      1.  **Dropoff Data Integrity Check:**
+          - For EVERY row that contains a "Customer Name", it is **MANDATORY** that both the **"Dropoff Address"** and the **"Dropoff Time"** columns are populated with the correct data from the document.
+          - There are no exceptions. If you find a row where either of these fields is blank, you must immediately re-analyze that specific trip in the source document and fill in the missing information. This is especially critical for shared rides (multiple rows with the same "Run Number"), where each customer has their own unique dropoff details.
+
+      2.  **Mileage Data Integrity Check:**
+          - For EVERY row with a "Customer Name", the "Mileage" column MUST be populated if the data exists in the source document.
+
+      3.  **City Abbreviation Check:**
+          - After all other validations, scan both the "Pickup Address" and "Dropoff Address" columns one last time. Confirm that ALL city abbreviations (e.g., 'TOROT', 'SCARB', 'ETOBI') have been replaced with their full names as defined in the City Mappings.
 
       **Final Output Rules:**
       - Your entire response MUST be only the CSV header row followed by the data rows.
@@ -157,6 +166,59 @@ const callGeminiWithRetry = async (
   throw new Error('Failed to convert a page. The file may be corrupted or in an unsupported format.');
 };
 
+/**
+ * Programmatically applies fill-down logic to a combined CSV string array.
+ * This ensures shared rides have their pickup info correctly filled,
+ * correcting any misses that happen at the boundaries of page chunks.
+ * @param csvLines - An array of strings, where each string is a line from the CSV.
+ * @returns A corrected array of CSV lines.
+ */
+const applyFillDownLogic = (csvLines: string[]): string[] => {
+    if (csvLines.length <= 1) { // Not enough data to process
+        return csvLines;
+    }
+
+    const unquote = (s: string) => s?.trim().replace(/^"|"$/g, '') || '';
+
+    const header = csvLines[0].split(',').map(unquote);
+    const runNumberIndex = header.indexOf('Run Number');
+    const pickupTimeIndex = header.indexOf('Pickup Time');
+    const pickupAddressIndex = header.indexOf('Pickup Address');
+
+    if (runNumberIndex === -1 || pickupTimeIndex === -1 || pickupAddressIndex === -1) {
+        console.warn('Could not find required columns for fill-down logic. Skipping.');
+        return csvLines;
+    }
+
+    const dataRows = csvLines.slice(1).map(line => line.split(','));
+
+    for (let i = 1; i < dataRows.length; i++) {
+        const prevRow = dataRows[i - 1];
+        const currentRow = dataRows[i];
+
+        if (prevRow.length <= runNumberIndex || currentRow.length <= runNumberIndex) continue;
+
+        const prevRunNumber = unquote(prevRow[runNumberIndex]);
+        const currentRunNumber = unquote(currentRow[runNumberIndex]);
+
+        if (currentRunNumber && currentRunNumber === prevRunNumber) {
+            const currentPickupTime = unquote(currentRow[pickupTimeIndex]);
+            const currentPickupAddress = unquote(currentRow[pickupAddressIndex]);
+
+            if (!currentPickupTime || !currentPickupAddress) {
+                if (prevRow.length > Math.max(pickupTimeIndex, pickupAddressIndex)) {
+                   currentRow[pickupTimeIndex] = prevRow[pickupTimeIndex];
+                   currentRow[pickupAddressIndex] = prevRow[pickupAddressIndex];
+                }
+            }
+        }
+    }
+
+    const processedDataLines = dataRows.map(row => row.join(','));
+    return [csvLines[0], ...processedDataLines];
+};
+
+
 export const convertPdfToCsv = async (
   base64File: string,
   mimeType: string,
@@ -208,10 +270,8 @@ export const convertPdfToCsv = async (
     if (lines.length === 0) return;
 
     if (index === 0) {
-      // For the first chunk, take all lines (header + data)
       finalCsvLines.push(...lines);
     } else {
-      // For subsequent chunks, skip the header row
       const headerRegex = /^"Date","Run Number"/i;
       if (headerRegex.test(lines[0])) {
         finalCsvLines.push(...lines.slice(1));
@@ -224,6 +284,9 @@ export const convertPdfToCsv = async (
   if (finalCsvLines.length < 2) { // Should have at least a header and one data row
     throw new Error("Conversion resulted in empty or incomplete data. The PDF might not contain a valid runsheet.");
   }
+  
+  onProgressUpdate('Applying data corrections...');
+  const correctedCsvLines = applyFillDownLogic(finalCsvLines);
 
-  return finalCsvLines.join('\n');
+  return correctedCsvLines.join('\n');
 };
