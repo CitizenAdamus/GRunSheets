@@ -9,45 +9,50 @@ const PROMPT = `
       You are an expert data extraction and transformation tool. Your task is to analyze the provided PDF transportation runsheet and convert all the relevant data into a single, clean CSV formatted string.
 
       The final CSV file MUST have the following columns in this exact order:
-      "Date","Run Number","Pickup Time","Customer Name","Pickup Address","Dropoff Address","Dropoff Time","Comments","Mileage"
+      "Date","Run Num","Pick Up Time","Customer","Customer ID","Pickup Address","Dropoff Address","Dropoff Time","Comment","Mileage"
 
       Follow these specific instructions for data transformation for EACH ROW of the PDF:
 
-      ### Part 1: Date, Time, and Mileage Processing
+      ### Part 1: Core Data Extraction
 
       1.  **"Date" Column:**
           - Identify the main date for the runsheet, which is typically located at the top of the PDF page (e.g., "10/2/2025").
           - Apply this single date to ALL rows in the final CSV.
           - Ensure the date format in the CSV is strictly \`MM/DD/YYYY\`. For example, if a row's date in the PDF is '02.10.25', you must convert it to \`10/02/2025\` using the year from the main document date.
 
-      2.  **"Dropoff Time" Column:**
+      2.  **"Customer ID" Column:**
+          - Locate the unique identifier for each customer, often labeled as "ID", "Customer #", or similar, usually next to the customer's name.
+          - This is a mandatory field for every row that has a "Customer".
+
+      3.  **"Dropoff Time" Column:**
           - Locate the dropoff time for each trip within the PDF and populate this column. This data may appear in its own column or near the dropoff address.
 
-      3.  **"Mileage" Column:**
-          - Locate the column in the PDF that contains the mileage for each trip.
-          - This value is numerical. For every valid trip, you must extract this value.
-          - If the data exists in the document for a specific row, this field MUST be populated.
+      4.  **"Mileage" Column:**
+          - Locate the mileage for each trip in the source document.
+          - If the mileage value in the PDF is present and greater than zero, use that value directly.
+          - If the mileage value is missing, blank, or zero for a trip, you **MUST calculate the approximate driving mileage** between the finalized "Pickup Address" and "Dropoff Address".
+          - Use the calculated value to populate the "Mileage" column. Round the result to one decimal place. This is a non-negotiable step to ensure every trip has a valid mileage value.
 
       ### Part 2: Data Fill-Down & Address Processing
 
       1.  **Data Fill-Down for Shared Rides (Crucial First Step):**
           - Before processing any other data for a row, you must check if it's part of a shared ride where data is missing.
-          - A shared ride is indicated when a row has the **same "Run Number"** as the row immediately preceding it, but its own **"Pickup Time" and/or "Pickup Address" fields are blank**.
-          - If these conditions are met, you **MUST copy both the "Pickup Time" AND the "Pickup Address"** from the preceding row into the current row's corresponding fields. This is a critical step to ensure data integrity for multi-passenger trips.
+          - A shared ride is indicated when a row has the **same "Run Num"** as the row immediately preceding it, but its own **"Pick Up Time" and/or "Pickup Address" fields are blank**.
+          - If these conditions are met, you **MUST copy both the "Pick Up Time" AND the "Pickup Address"** from the preceding row into the current row's corresponding fields. This is a critical step to ensure data integrity for multi-passenger trips.
 
       2.  **"Pickup Address" Column:**
           - After applying the fill-down logic, process the "Pickup Address" field.
           - Extract ONLY the street address and city. The address is considered complete once you reach the city name.
-          - Move any text that appears *after* the city name (e.g., intersection details, notes) to the "Comments" column.
+          - Move any text that appears *after* the city name (e.g., intersection details, notes) to the "Comment" column.
           - After extracting the clean address, it is **MANDATORY** to replace any city abbreviations using the **City Mappings** below. No abbreviations are allowed in the final output.
           - **Example**: "70 LEONARD AVE, TOROTO" MUST become "70 LEONARD AVE, TORONTO".
 
       3.  **"Dropoff Address" Column:**
           - For every trip with a customer and pickup address, you MUST extract the corresponding dropoff address. This field is mandatory and must not be left blank if the information exists in the document.
-          - Perform the same extraction and mandatory mapping process as the "Pickup Address". Move any extra text to the "Comments" column.
+          - Perform the same extraction and mandatory mapping process as the "Pickup Address". Move any extra text to the "Comment" column.
           - **Example**: "5 PIPPIN PL, ETOBI" MUST become "5 PIPPIN PL, ETOBICOKE".
 
-      ### Part 3: The "Comments" Column & Mappings
+      ### Part 3: The "Comment" Column & Mappings
 
       This single column combines all notes. Construct it carefully by following these steps in order:
 
@@ -78,14 +83,17 @@ const PROMPT = `
       ### Part 4: ABSOLUTE FINAL VALIDATION - NON-NEGOTIABLE RULES
       Before providing the final CSV output, you must perform a self-correction pass and verify every single row against these rules. Failure to comply will result in an incorrect output.
 
-      1.  **Dropoff Data Integrity Check:**
-          - For EVERY row that contains a "Customer Name", it is **MANDATORY** that both the **"Dropoff Address"** and the **"Dropoff Time"** columns are populated with the correct data from the document.
-          - There are no exceptions. If you find a row where either of these fields is blank, you must immediately re-analyze that specific trip in the source document and fill in the missing information. This is especially critical for shared rides (multiple rows with the same "Run Number"), where each customer has their own unique dropoff details.
+      1.  **Customer Data Integrity Check:**
+          - For EVERY row that contains a "Customer", it is **MANDATORY** that the **"Customer ID"** column is populated.
 
-      2.  **Mileage Data Integrity Check:**
-          - For EVERY row with a "Customer Name", the "Mileage" column MUST be populated if the data exists in the source document.
+      2.  **Dropoff Data Integrity Check:**
+          - For EVERY row that contains a "Customer", it is **MANDATORY** that both the **"Dropoff Address"** and the **"Dropoff Time"** columns are populated with the correct data from the document.
+          - There are no exceptions. If you find a row where either of these fields is blank, you must immediately re-analyze that specific trip in the source document and fill in the missing information. This is especially critical for shared rides (multiple rows with the same "Run Num"), where each customer has their own unique dropoff details.
 
-      3.  **City Abbreviation Check:**
+      3.  **Mileage Data Integrity Check:**
+          - For EVERY row with a "Customer", the "Mileage" column MUST be populated with a numerical value. If the value was missing in the source document, it **MUST be populated with your calculated value**.
+
+      4.  **City Abbreviation Check:**
           - After all other validations, scan both the "Pickup Address" and "Dropoff Address" columns one last time. Confirm that ALL city abbreviations (e.g., 'TOROT', 'SCARB', 'ETOBI') have been replaced with their full names as defined in the City Mappings.
 
       **Final Output Rules:**
@@ -181,8 +189,8 @@ const applyFillDownLogic = (csvLines: string[]): string[] => {
     const unquote = (s: string) => s?.trim().replace(/^"|"$/g, '') || '';
 
     const header = csvLines[0].split(',').map(unquote);
-    const runNumberIndex = header.indexOf('Run Number');
-    const pickupTimeIndex = header.indexOf('Pickup Time');
+    const runNumberIndex = header.indexOf('Run Num');
+    const pickupTimeIndex = header.indexOf('Pick Up Time');
     const pickupAddressIndex = header.indexOf('Pickup Address');
 
     if (runNumberIndex === -1 || pickupTimeIndex === -1 || pickupAddressIndex === -1) {
@@ -272,7 +280,7 @@ export const convertPdfToCsv = async (
     if (index === 0) {
       finalCsvLines.push(...lines);
     } else {
-      const headerRegex = /^"Date","Run Number"/i;
+      const headerRegex = /^"Date","Run Num"/i;
       if (headerRegex.test(lines[0])) {
         finalCsvLines.push(...lines.slice(1));
       } else {
